@@ -1,155 +1,86 @@
-// custom properties
-:url-repo: https://github.com/bettercodepaul/programming-challenge
+= Weather and country data challenge
 
-= BettercallPaul programming challenge
+This application evaluates two CSV data sets:
 
-This repository provides the project scaffold for a simple
-programming challenge. Though the challenge is very simple
-and a rather synthetic use-case, your results are a helpful
-starting point to discuss your programming flavor, skills
-and methodology.
+* It determines the day with the smallest difference between maximum and minimum temperature.
+* It determines the EU country with the highest population density.
 
-**BEFORE STARTING:** Please take the time and read this 
-document completely and carefully! It describes important 
-parts of the challenge.
+For the supplied data, the results are day `14` and `Malta`.
 
+== Build and run
 
-== Goal
+Java 11 or newer is required. The project can be built and tested with the included Maven wrapper:
 
-Implement a solution for the given tasks which aims for
-
-* robustness & correctness
-* readability & maintainability
-* clean software design & architecture
-
-Be prepared to discuss your implementation and software design
-decisions. Show us how you would solve the task when working on your day-to-day 
-job.
-
-Feel free to come up with own ideas & solutions. There is no plain
-"right" or "wrong". Instead, we want to talk to you
-about _how_ you achieved your goal and about your thoughts and design
-idea and process.
-
-=== Use of coding assistants and AI
-
-The current wave of generative AI can be a powerful tool in the hands of a keen developer. 
-Feel free to use your coding assistant of choice when solving this challenge if you so desire.
-We're looking forward to hear about your approach.
-
-== Tasks
-
-=== Time estimation
-Between ~1.5 hour up to ~4 hours,  +
-depending on your previous experience & development environment.
-
-=== Task
-
-Weather::
-    In `weather.csv` you'll find the daily weather data of a single month.
-    Read the file, then output the day number (column one `Day`) of the day with
-    the smallest temperature spread (difference between maximum &
-    minimum temperature of the day.)
-    The maximum temperature is the second column `MxT`, the minimum
-    temperature the third column `MnT`.
-
-Countries::
-    `countries.csv` contains a list of data about the 27 countries of the European
-    Union.
-    Use the columns `Population` and `Area` to compute each country's population
-    density. Read the file, then print the name of the country with the highest number
-    of people per square kilometre.
-
-Task::
-    1. Write a single program which is able to solve the "Weather" challenge.
-    2. Then refactor and extend your solution such that it additionally
-       supports the Countries challenge.
-
-Process::
-* Favour the software design goals described under _<<Goal>>_ over other goals 
-  like _performance_ or _feature set_.
-* Include unit tests to ensure the correctness of your implementation.
-
-
-=== Hints
-
-Your solution should focus on **maintainability**, **reusability** and
-**readability**. Here are some hints on how you may achieve these goals:
-
-1. The most important aspect is **separation of concerns**. Think about
-   the different concerns involved in the task and how they may need to
-   change in the future. For example: one concern is reading the file.
-   What others components can you think of? Try to design separate,
-   concise software components for each concern.
-
-2. Often a quick diagram illustrating the components and their interactions
-   can be helpful. If you draw a diagram, feel free to include it in your
-   solution.
-
-3. Design **intuitive interfaces** for the components in a way that each
-   component can be replaced. For example in the next evolution step
-   of your solution you might need to support other data formats like
-   JSON files or even Web services. The Reader for the CSV-files in your
-   example could be replaced with a reader that implements the same
-   interface but reads JSON-files.
-
-4. Use **meaningful names** for classes, properties and methods. By
-   reading the name, one should already have an idea of what something
-   does.
-
-5. Think about possible **error cases**, e.g. if a file is empty or contains invalid input, and how they should be handled. Use log messages where necessary.
-
-6. You may use additional third-party dependencies as you see fit. Please include your reasoning for your choice of libraries in your solution.
-
-== Getting started
-
-=== Install Java
-
-For this project, the Java Development Kit 11 or above is required. You can download it from https://adoptium.net/.
-
-=== Getting a copy
-
-The starting point for every challenge is provided as a branch in a GitHub
-hosted Git repository. Be careful to adjust the URLs below
-accordingly.
-
-To start
-
-=== Fork or directly clone the repository
-
-[source,bash,subs="attributes+"]
+[source,bash]
 ----
-git clone {url-repo}.git
+./mvnw verify
 ----
 
-or if you've forked the repository then
+On Windows, use `mvnw.cmd verify` instead. Run the application with:
 
-```
-git clone git@github.com:YOURNAME/programming-challenge.git
-```
+[source,bash]
+----
+./mvnw exec:java
+----
 
-=== Building and running
-The project scaffolds provides a Maven `pom.xml` as starting
-point. You should be able to start with any IDE or text editor
-you are convenient with.
+The program prints both results to standard output.
 
-After installing Maven 3.x or by calling the included Maven wrapper (`mvnw` and `mvnw.cmd`, depending on your operating system) you should be able to
+== Design
 
-Build & test your project::
-    `mvn verify`
+The implementation separates the import pipeline from the two calculations:
 
-Then to run the main class _de.bcxp.challenge.App_::
-    `mvn exec:java`
+`DataFileReader`::
+Reads records from a data source. `CSVFileReader` is the CSV implementation used by this application.
 
-To remove the compilation output::
-    `mvn clean`
+`DataMapper`::
+Maps a source record to a small domain object. Weather and country data use separate mappers.
 
-Or use your IDE functionality::
-    to run & debug your program.
+`DataImportService`::
+Composes a reader and mapper into a reusable import flow and loads classpath resources as UTF-8.
 
-== Submitting your results
+Domain objects::
+`WeatherRecord` and `CountryRecord` contain only the values required by their calculation and expose the derived temperature spread or population density.
 
-Ideally you provide your solutions as Git repository with
-appropriate commits and descriptions. If you have a GitLab.com
-or GitHub account, please feel free to publish your solution
-there.
+Services::
+`WeatherService` and `CountryService` select the requested result without depending on CSV or resource handling.
+
+Validators::
+Dedicated validators enforce the invariants needed by each calculation before a domain object is created.
+
+This division keeps file access, parsing, validation, and business rules independently testable. The generic reader and mapper interfaces also allow another input format, such as JSON or a web service, to be introduced without changing the calculation services.
+
+== Implementation decisions
+
+=== CSV parsing
+
+Apache Commons CSV is used instead of manually splitting lines. It handles quoting and configurable delimiters and avoids coupling the implementation to incidental formatting details.
+
+The weather file uses commas, while the country file uses semicolons. The delimiter is therefore a configuration of `CSVFileReader`, not duplicated parsing logic.
+
+Required values are accessed by header name rather than column position. Reordering columns consequently does not affect the import. Only fields required for the calculations are mapped, so malformed values in unrelated columns do not invalidate otherwise usable input.
+
+=== Numeric values
+
+Weather temperatures are parsed as finite `double` values. Country population and area are integral values because people and square-kilometre figures in the source data are whole numbers.
+
+The supplied country data contains both plain integers and a German-style grouped population value such as `4.036.355,00`. The country mapper accepts these two explicit whole-number representations. Other or ambiguous representations are rejected instead of being interpreted silently.
+
+Population density uses floating-point division to avoid integer truncation.
+
+=== Validation and errors
+
+Invalid input fails fast with a descriptive exception:
+
+* Missing resources produce a `DataFileNotFoundException`.
+* CSV parsing and mapping failures produce a `DataImportException`.
+* Invalid domain values are detected through `ValidationException` and enriched with CSV record context by the mapper.
+
+The application rejects non-positive days, non-finite temperatures, a maximum temperature below the minimum, blank country names, negative populations, and non-positive areas. Empty input collections are rejected by the calculation services because no meaningful result exists.
+
+=== Equal results
+
+If several weather records have the same smallest spread, the first record is retained. The country calculation follows the same deterministic first-record behaviour for equal densities.
+
+== Tests
+
+The test suite contains focused unit tests for readers, mappers, validators, and calculation services. Integration tests load the supplied classpath resources and verify both the number of imported records and the final results. Error-path tests cover missing resources and headers, malformed numbers, invalid domain values, empty inputs, delimiter configuration, and quoted CSV values.
